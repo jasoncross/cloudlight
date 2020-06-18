@@ -22,7 +22,7 @@ This paragraph must be included in any redistribution.
 
 // Mode enumeration - if you want to add additional party or colour modes, add them here; you'll need to map some IR codes to them later; 
 // and add the modes into the main switch loop
-enum Mode { ALLOFF, SOUNDCLOUD,FLATCOLOR,FLOATCOLOR,FLOATCOLORROTATE,STATICCOLOR,COLORRUN, AUTOSTORM, THUNDERBURST, 
+enum Mode { ALLOFF, SOUNDCLOUD,FLATCOLOR,FLOATCOLOR,FLOATCOLORROTATE,STATICCOLOR,COLORRUN, MUSICREACT, AUTOSTORM, THUNDERBURST, 
             ROLLING, CRACK, RUMBLE, ZAP, ACID,REDCOLOR,GREENCOLOR,BLUECOLOR,WHITECOLOR,RAINBOWCYCLE};
 
 // Set default settings here
@@ -96,8 +96,13 @@ int pixelBrightness[NUM_LEDS];
 uint32_t pixelColor[NUM_LEDS];
 int pixelDirection[NUM_LEDS];
 
-
-
+// music sampling
+#define MAXVOLTS 5
+const int sampleWindow = 50; // Sample window width in mS (50 mS = 20Hz)
+unsigned int sample;
+float voltAverage;
+int voltSampleCount = 0;
+int flipper = 1;
 
 // Define the array of leds
 CRGB leds[NUM_LEDS];
@@ -221,6 +226,8 @@ uint32_t flatColors(int colorChoice) {
 }
 
 void setup() { 
+
+  analogReference(EXTERNAL); // setting AREF to voltage divided input
   
   // this line sets the LED strip type - refer fastLED documeantion for more details https://github.com/FastLED/FastLED
   FastLED.addLeds<WS2811, DATA_PIN, BRG>(leds, NUM_LEDS);
@@ -382,6 +389,8 @@ void receiveEvent(int bytes) {
           mode = RAINBOWCYCLE; break;
         case 0xAF: // color run
           mode = COLORRUN; break;
+        case 0x8F:  //music reactive
+          mode = MUSICREACT; break;
         case 0xC5:
           brightnessUp();break;
         case 0x45:
@@ -471,6 +480,7 @@ void loop() {
     case FLOATCOLOR: floatColor(colorMode);break;
     case FLOATCOLORROTATE: floatColor(-1);break;
     case COLORRUN: colorRun(colorMode);break;
+    case MUSICREACT:  musicReactive(0);break;
     case AUTOSTORM: autoStorm();break;
     case THUNDERBURST: activateStorm(1);mode=lastMode;break;
     case ROLLING: activateStorm(2);mode=lastMode;break;
@@ -889,6 +899,92 @@ void acid_cloud(){
     off();
     
   //}
+}
+
+void musicReactive(int reactMode) {
+  if(lastMode != mode){
+    Serial.println("Mode: music reactive");
+    voltSampleCount = 1; // reset
+  }
+  lastMode = mode;
+
+  if (flipper == 1)
+    reactMode = 0;
+  else
+    reactMode = 1;
+  
+  unsigned long startMillis= millis();  // Start of sample window
+  unsigned int peakToPeak = 0;   // peak-to-peak level
+   
+  unsigned int signalMax = 0;
+  unsigned int signalMin = 1024;
+
+  double maxVolts = 5.00;
+  
+  // collect data for 50 mS
+   while (millis() - startMillis < sampleWindow)
+   {
+      sample = analogRead(MIC_PIN);
+      if (sample < 1024)  // toss out spurious readings
+      {
+         if (sample > signalMax)
+         {
+            signalMax = sample;  // save just the max levels
+         }
+         else if (sample < signalMin)
+         {
+            signalMin = sample;  // save just the min levels
+         }
+      }
+   }
+   peakToPeak = signalMax - signalMin;  // max - min = peak-peak amplitude
+   double volts = (peakToPeak * 5.0) / 1024;  // convert to volts
+   
+   /*if (voltSampleCount >= SAMPLES)
+    voltSampleCount = 1;  // reset them
+   voltAverage = ((voltAverage * (voltSampleCount - 1)) + volts) / voltSampleCount;
+   voltSampleCount++;
+
+   // adjust volts for the baseline average
+   volts = volts-voltAverage;
+   if (volts < 0)
+    volts = 0; // can't go negative
+   maxVolts = ((double) MAXVOLTS) - volts; 
+
+   Serial.print(voltSampleCount);
+   Serial.print(":");
+   Serial.print(voltAverage);
+   Serial.print(":");
+   Serial.print(volts);
+   Serial.print(":");
+   Serial.println(maxVolts);*/
+ 
+   //Serial.println(volts);
+   int hueNow = 255 * ((volts-.2)/(maxVolts-.2));
+   int stopPoint = NUM_LEDS * ((volts-.2)/(maxVolts-.2));
+   if (stopPoint == 1)
+    stopPoint = 0; // quiet the first one
+   /*Serial.print(volts);
+   Serial.print(":");
+   Serial.println(hueNow);*/
+   if (reactMode == 0) {
+     for (int i=0;i<NUM_LEDS;i++) {
+      if (i < stopPoint)
+        leds[i] = CHSV( 255-hueNow, 255, 255);
+      else
+        leds[i] = CHSV(0,0,0);
+     }
+   } else {
+    for (int i=NUM_LEDS;i>0;i--) {
+      if (i > NUM_LEDS - stopPoint)
+        leds[i-1] = CHSV( 255-hueNow, 255, 255);
+      else
+        leds[i-1] = CHSV(0,0,0);
+     }
+   }
+   FastLED.show();
+   if (stopPoint <= 1)
+    flipper = flipper * -1;
 }
 
 void rolling(){

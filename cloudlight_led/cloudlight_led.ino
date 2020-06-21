@@ -23,7 +23,7 @@ This paragraph must be included in any redistribution.
 // Mode enumeration - if you want to add additional party or colour modes, add them here; you'll need to map some IR codes to them later; 
 // and add the modes into the main switch loop
 enum Mode { ALLOFF, SOUNDCLOUD,FLATCOLOR,FLOATCOLOR,FLOATCOLORROTATE,STATICCOLOR,COLORRUN, MUSICREACT, AUTOSTORM, THUNDERBURST, 
-            ROLLING, CRACK, RUMBLE, ZAP, ACID,REDCOLOR,GREENCOLOR,BLUECOLOR,WHITECOLOR,RAINBOWCYCLE};
+            ROLLING, CRACK, RUMBLE, ZAP, ZAPOUT, ACID,REDCOLOR,GREENCOLOR,BLUECOLOR,WHITECOLOR,RAINBOWCYCLE};
 
 // Set default settings here
 Mode defaultMode = SOUNDCLOUD;
@@ -463,6 +463,8 @@ void receiveEvent(int bytes) {
           mode = RUMBLE; break;
         case 0x77:
           mode = ZAP; break;
+        case 0xB7:
+          mode = ZAPOUT; break;
       }
       
    }
@@ -487,6 +489,7 @@ void loop() {
     case CRACK: activateStorm(3);mode=lastMode;break;
     case RUMBLE: activateStorm(4);mode=lastMode;break;
     case ZAP: activateStorm(5);mode=lastMode;break;
+    case ZAPOUT: activateStorm(6);mode=lastMode;break;
     case ACID: acid_cloud();off();break;
     case ALLOFF: offMode();break;
     case REDCOLOR: setColorMode(2);break;
@@ -820,7 +823,7 @@ void activateStorm(int stormSelect) {
   off();
 
     if (!stormSelect > 0)
-      stormSelect = random(1,6);
+      stormSelect = random(1,7);
    
     //I've programmed multiple types of lightning. Each cycle, we pick a random one. 
     switch(stormSelect){
@@ -855,6 +858,11 @@ void activateStorm(int stormSelect) {
       case 5:
         zap();
         Serial.println("Zap");
+         delay(random(10,500));
+        break;
+      case 6:
+        zapOut();
+        Serial.println("Zap Out");
          delay(random(10,500));
         break;
     }
@@ -908,11 +916,6 @@ void musicReactive(int reactMode) {
   }
   lastMode = mode;
 
-  if (flipper == 1)
-    reactMode = 0;
-  else
-    reactMode = 1;
-  
   unsigned long startMillis= millis();  // Start of sample window
   unsigned int peakToPeak = 0;   // peak-to-peak level
    
@@ -922,69 +925,98 @@ void musicReactive(int reactMode) {
   double maxVolts = 5.00;
   
   // collect data for 50 mS
-   while (millis() - startMillis < sampleWindow)
-   {
-      sample = analogRead(MIC_PIN);
-      if (sample < 1024)  // toss out spurious readings
-      {
-         if (sample > signalMax)
-         {
-            signalMax = sample;  // save just the max levels
-         }
-         else if (sample < signalMin)
-         {
-            signalMin = sample;  // save just the min levels
-         }
-      }
-   }
-   peakToPeak = signalMax - signalMin;  // max - min = peak-peak amplitude
-   double volts = (peakToPeak * 5.0) / 1024;  // convert to volts
-   
-   /*if (voltSampleCount >= SAMPLES)
-    voltSampleCount = 1;  // reset them
-   voltAverage = ((voltAverage * (voltSampleCount - 1)) + volts) / voltSampleCount;
-   voltSampleCount++;
-
-   // adjust volts for the baseline average
-   volts = volts-voltAverage;
-   if (volts < 0)
-    volts = 0; // can't go negative
-   maxVolts = ((double) MAXVOLTS) - volts; 
-
-   Serial.print(voltSampleCount);
-   Serial.print(":");
-   Serial.print(voltAverage);
-   Serial.print(":");
-   Serial.print(volts);
-   Serial.print(":");
-   Serial.println(maxVolts);*/
- 
-   //Serial.println(volts);
-   int hueNow = 255 * ((volts-.2)/(maxVolts-.2));
-   int stopPoint = NUM_LEDS * ((volts-.2)/(maxVolts-.2));
-   if (stopPoint == 1)
-    stopPoint = 0; // quiet the first one
-   /*Serial.print(volts);
-   Serial.print(":");
-   Serial.println(hueNow);*/
-   if (reactMode == 0) {
+  while (millis() - startMillis < sampleWindow)
+  {
+    sample = analogRead(MIC_PIN);
+    if (sample < 1024)  // toss out spurious readings
+    {
+       if (sample > signalMax)
+       {
+          signalMax = sample;  // save just the max levels
+       }
+       else if (sample < signalMin)
+       {
+          signalMin = sample;  // save just the min levels
+       }
+    }
+  }
+  peakToPeak = signalMax - signalMin;  // max - min = peak-peak amplitude
+  double volts = (peakToPeak * 5.0) / 1024;  // convert to volts
+  
+  /*if (voltSampleCount >= SAMPLES)
+  voltSampleCount = 1;  // reset them
+  voltAverage = ((voltAverage * (voltSampleCount - 1)) + volts) / voltSampleCount;
+  voltSampleCount++;
+  
+  // adjust volts for the baseline average
+  volts = volts-voltAverage;
+  if (volts < 0)
+  volts = 0; // can't go negative
+  maxVolts = ((double) MAXVOLTS) - volts; 
+  
+  Serial.print(voltSampleCount);
+  Serial.print(":");
+  Serial.print(voltAverage);
+  Serial.print(":");
+  Serial.print(volts);
+  Serial.print(":");
+  Serial.println(maxVolts);*/
+  
+  //Serial.println(volts);
+  
+  /*Serial.print(volts);
+  Serial.print(":");
+  Serial.println(hueNow);*/
+  reactMode = 0;
+  int hueNow = 255 * ((volts-.2)/(maxVolts-.2));
+  if (reactMode == 0) {
+    int stopPoint = NUM_LEDS * ((volts-.2)/(maxVolts-.2));
+    if (stopPoint == 1)
+      stopPoint = 0; // quiet the first one
+    if (flipper == 1) {
      for (int i=0;i<NUM_LEDS;i++) {
       if (i < stopPoint)
         leds[i] = CHSV( 255-hueNow, 255, 255);
       else
         leds[i] = CHSV(0,0,0);
-     }
-   } else {
-    for (int i=NUM_LEDS;i>0;i--) {
-      if (i > NUM_LEDS - stopPoint)
-        leds[i-1] = CHSV( 255-hueNow, 255, 255);
-      else
-        leds[i-1] = CHSV(0,0,0);
-     }
-   }
-   FastLED.show();
-   if (stopPoint <= 1)
+      }
+    } else {
+      for (int i=NUM_LEDS;i>0;i--) {
+        if (i > NUM_LEDS - stopPoint)
+          leds[i-1] = CHSV( 255-hueNow, 255, 255);
+        else
+          leds[i-1] = CHSV(0,0,0);
+      }
+    }
+    if (stopPoint <= 1)
     flipper = flipper * -1;
+  } else if (reactMode == 1) {
+    // alternating offs/ons
+    int skipCount = 50;
+    int nowBrightness = hueNow;
+    if (nowBrightness < 0)
+      nowBrightness = 0;
+    else if (nowBrightness > 5)
+      nowBrightness = 255;
+    //Serial.println(nowBrightness);
+    for (int i=0;i<NUM_LEDS;i++) {
+      if (flipper == 1) {
+        if (i % (skipCount * 2) < skipCount)
+          leds[i-1] = CHSV( 255-hueNow, 255, nowBrightness);
+        else
+          leds[i-1] = CHSV(0,0,0);
+      } else {
+        if (i % (skipCount * 2) < skipCount)
+          leds[i-1] = CHSV(0,0,0);
+        else
+          leds[i-1] = CHSV( 255-hueNow, 255, nowBrightness);
+      }
+    }
+    if ((flipper == 1 && (volts - .2) > 2.5)||(flipper == -1 && (volts - .2) < 2.5))
+      flipper = flipper * -1;
+  }
+  FastLED.show();
+  
 }
 
 void rolling(){
@@ -1251,6 +1283,83 @@ void sparkle() {
           leds[NUM_LEDS-i] = nowColor;
       }
       FastLED.show();
+      delay(random(10,100));
+    }
+  }
+}
+
+void zapOut() {
+  // goes from one point of strand up
+
+  uint32_t nowColor = basicColors[colorMode][random(0,10)]; 
+  int startPoint;
+  int bottomPoint;
+  int topPoint;
+  bool lengthReached = false;
+  int flashLength = 1;
+  int moveChance;
+  int moveDir = random(0,2);
+
+  // first get the starting point - somewhere around the middle of the length +/- 20%
+  startPoint = random((NUM_LEDS/2)*.8,(NUM_LEDS/2)*1.2);
+  bottomPoint = startPoint;
+  topPoint = startPoint;
+
+  off(); // start with all off
+
+  while (lengthReached == false ) {
+    // light the length
+    for (int i = 0; i < NUM_LEDS; i++) {
+      if (i >= bottomPoint && i <= topPoint)
+        leds[i] = nowColor;
+      else
+        leds[i] = CHSV(0,0,0);
+    }
+    FastLED.show();
+    //Serial.print(bottomPoint);
+    //Serial.print(":");
+    //Serial.println(topPoint);
+    delay(random(10,50));
+    //Maybe flash a bit as it grows
+    if (random(0,5) == 0) {
+      //nowColor = basicColors[colorMode][random(0,10)];
+      for (int i=1;i<random(2,5);i++) {
+        off();
+        delay(random(10,100));
+        for (int i = 0; i < NUM_LEDS; i++) {
+          if (i >= bottomPoint && i <= topPoint)
+            leds[i] = nowColor;
+          else
+            leds[i] = CHSV(0,0,0);
+        }
+        FastLED.show();
+        //Serial.println("flash");
+        delay(random(10,100));
+      }
+    }
+    if (bottomPoint == 0 && topPoint == (NUM_LEDS - 1))
+      lengthReached = true;
+    //Most likely extend length
+    if (random(0,4) != 0 && bottomPoint > 0)
+      bottomPoint--;
+    if (random(0,4) != 0 && topPoint < (NUM_LEDS-1))
+      topPoint++;
+  }
+
+  //Maybe flash a bit at end
+  if (random(0,5) != 0) {
+    //nowColor = basicColors[colorMode][random(0,10)];
+    for (int i=1;i<random(2,9);i++) {
+      off();
+      delay(random(10,100));
+      for (int i = 0; i < NUM_LEDS; i++) {
+        if (moveDir == 0)
+          leds[i] = nowColor;
+        else
+          leds[NUM_LEDS-i] = nowColor;
+      }
+      FastLED.show();
+      //Serial.println("endflash");
       delay(random(10,100));
     }
   }

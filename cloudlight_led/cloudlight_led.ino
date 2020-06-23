@@ -493,10 +493,6 @@ void loop() {
     case ZAPOUT: activateStorm(6);mode=lastMode;break;
     case ACID: acid_cloud();off();break;
     case ALLOFF: offMode();break;
-    case REDCOLOR: setColorMode(2);break;
-    case BLUECOLOR: setColorMode(6);break;
-    case GREENCOLOR: floatColor(4);break;
-    case WHITECOLOR: single_colour(0, 0);break;
     case RAINBOWCYCLE: rainbowCycle();break;
     default: detect_thunder(); off();break;
   }
@@ -563,11 +559,6 @@ void setColorMode(int colorChoice) {
   settingsChanged = true;
 }
 
-// Makes all the LEDs a single colour, see https://raw.githubusercontent.com/FastLED/FastLED/gh-pages/images/HSV-rainbow-with-desc.jpg for H values
-// This function is useful if you do not need to manipulate the saturation
-void single_colour(int H){
-  single_colour(H, 255);
-}
 
 // All a single flat color
 void flatColor(int colorChoice) {
@@ -576,6 +567,10 @@ void flatColor(int colorChoice) {
     // first on this mode
     resetLEDs();
     lastMode = mode;
+    if (colorChoice == 0 && lastColorMode > 0) { // if previously cloud and was a color prior
+      colorMode = lastColorMode;
+      colorChoice = colorMode;
+    }
   }
   for (int a=0;a<NUM_LEDS;a++){
     if(colorMode == 1) // rainbow color
@@ -594,10 +589,18 @@ void flatColor(int colorChoice) {
 void staticColor(int colorChoice) {
   if(lastMode != mode){
     Serial.println("Mode: static colors");
+    if (colorChoice == 0 && lastColorMode > 0) { // if previously cloud and was a color prior
+      colorMode = lastColorMode;
+      colorChoice = colorMode;
+    }
     // first on this mode
     resetLEDs();
     seedColors(colorChoice);
     lastMode = mode;
+    if (colorChoice == 0 && lastColorMode > 0) { // if previously cloud and was a color prior
+      colorMode = lastColorMode;
+      colorChoice = colorMode;
+    }
   }
   if (colorChoice != lastColorMode) { // update colors if a new mode
     seedColors(colorChoice);
@@ -623,6 +626,10 @@ void resumeActions() {
 void floatColor(int colorChoice){
   if(lastMode != mode){
     Serial.println("Mode: float color");
+    if (colorChoice == 0 && lastColorMode > 0) { // if previously cloud and was a color prior
+      colorMode = lastColorMode;
+      colorChoice = colorMode;
+    }
     if (colorChoice == -1) {
       colorRotate = true;
       rotateColor = random(2,18);
@@ -699,18 +706,6 @@ void floatColor(int colorChoice){
   //Serial.println(pixelBrightness[0]);
 }
 
-// For white color, set S (saturation) as 0
-void single_colour(int H, int S){
-  for (int i=0;i<NUM_LEDS;i++){
-    leds[i] = CHSV( H, S, brightness);
-  }
-  //avoid flickr which occurs when FastLED.show() is called - only call if the colour changes
-  if(lastMode != mode){
-    FastLED.show(); 
-    lastMode = mode;
-  }
-  delay(50);
-}
 
 void rainbowCycle(){
   if(lastMode != mode){
@@ -757,6 +752,10 @@ void colorRun(int colorChoice){
 void detect_thunder() {
   if(lastMode != mode){
     Serial.println("Mode: storm on sound detection");
+    if (colorMode != 0) { // if not cloud colors
+      lastColorMode = colorMode; // save prior color mode
+      colorMode = 0; // reset to cloud colors
+    }
   }
   lastMode = mode;
   
@@ -810,6 +809,10 @@ void autoStorm () {
     resumeMode = lastMode;
     Serial.println("Mode: auto storm");
     counter = 0;
+    if (colorMode != 0) { // if not cloud colors
+      lastColorMode = colorMode; // save prior color mode
+      colorMode = 0; // reset to cloud colors
+    }
   }
   lastMode = mode;
   if (counter > random((actionSpeed * 200)*.6,(actionSpeed * 200)*1.3)) {

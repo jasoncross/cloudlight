@@ -102,7 +102,8 @@ const int sampleWindow = 50; // Sample window width in mS (50 mS = 20Hz)
 unsigned int sample;
 float voltAverage;
 int voltSampleCount = 0;
-int flipper = 1;
+int flipper = 4;
+
 
 // Define the array of leds
 CRGB leds[NUM_LEDS];
@@ -970,27 +971,51 @@ void musicReactive(int reactMode) {
   reactMode = 0;
   int hueNow = 255 * ((volts-.2)/(maxVolts-.2));
   if (reactMode == 0) {
-    int stopPoint = NUM_LEDS * ((volts-.2)/(maxVolts-.2));
-    if (stopPoint == 1)
-      stopPoint = 0; // quiet the first one
-    if (flipper == 1) {
-     for (int i=0;i<NUM_LEDS;i++) {
-      if (i < stopPoint)
-        leds[i] = CHSV( 255-hueNow, 255, 255);
-      else
-        leds[i] = CHSV(0,0,0);
-      }
-    } else {
-      for (int i=NUM_LEDS;i>0;i--) {
-        if (i > NUM_LEDS - stopPoint)
-          leds[i-1] = CHSV( 255-hueNow, 255, 255);
+    if (flipper > 2) {
+      int stopPoint = NUM_LEDS * ((volts-.2)/(maxVolts-.2));
+      if (stopPoint == 1)
+        stopPoint = 0; // quiet the first one
+      if (flipper == 1) {
+       for (int i=0;i<NUM_LEDS;i++) {
+        if (i < stopPoint)
+          leds[i] = CHSV( 255-hueNow, 255, 255);
         else
-          leds[i-1] = CHSV(0,0,0);
+          leds[i] = CHSV(0,0,0);
+        }
+      } else {
+        for (int i=NUM_LEDS;i>0;i--) {
+          if (i > NUM_LEDS - stopPoint)
+            leds[i-1] = CHSV( 255-hueNow, 255, 255);
+          else
+            leds[i-1] = CHSV(0,0,0);
+        }
       }
+      if (stopPoint <= 1)
+      flipper = random(0,5);
+    } else {
+      int centerPoint = NUM_LEDS/2;
+      int stopPoint = centerPoint * ((volts-.2)/(maxVolts-.2));
+      int bottomPoint = centerPoint - stopPoint;
+      if (bottomPoint < 0)
+        bottomPoint = 0;
+      int topPoint = centerPoint + stopPoint;
+      Serial.print(bottomPoint);
+      Serial.print(":");
+      Serial.println(topPoint);
+      if (topPoint >= NUM_LEDS)
+        topPoint = NUM_LEDS - 1;
+      for (int i=0;i<NUM_LEDS;i++) {
+        if (i < bottomPoint || i > topPoint)
+          leds[i] = CHSV(0,0,0);
+        else
+          leds[i] = CHSV( 255-hueNow, 255, 255);
+      }
+      if (stopPoint == centerPoint)
+        flipper = random(0,5);
     }
-    if (stopPoint <= 1)
-    flipper = flipper * -1;
   } else if (reactMode == 1) {
+    
+  } else if (reactMode == 2) {
     // alternating offs/ons
     int skipCount = 50;
     int nowBrightness = hueNow;
